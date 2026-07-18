@@ -10,16 +10,13 @@ export function Reveal({
   children,
   delay = 0,
   className = "",
-  as: Tag = "div",
 }: {
   children: ReactNode;
   delay?: number;
   className?: string;
-  as?: keyof JSX.IntrinsicElements;
 }) {
-  const MTag = motion(Tag as any);
   return (
-    <MTag
+    <motion.div
       className={className}
       initial="hidden"
       whileInView="show"
@@ -28,6 +25,6 @@ export function Reveal({
       transition={{ delay }}
     >
       {children}
-    </MTag>
+    </motion.div>
   );
 }
