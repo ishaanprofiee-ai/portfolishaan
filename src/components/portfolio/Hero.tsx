@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
 import { ArrowUpRight, Download, MessageCircle } from "lucide-react";
 import { MagneticButton } from "./MagneticButton";
-
-const TITLES = ["Software Developer", "Web Designer", "AI Enthusiast"];
+import { useSite } from "@/hooks/useSiteContent";
 
 export function Hero() {
+  const site = useSite();
+  const { hero, personal } = site;
+
   return (
     <section id="top" className="relative flex min-h-screen items-center px-6 pt-32 pb-20 md:px-10">
       <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-16 md:grid-cols-[1.15fr_0.85fr] md:items-center">
@@ -19,7 +21,7 @@ export function Hero() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
             </span>
-            AVAILABLE FOR OPPORTUNITIES
+            {hero.availabilityBadge}
           </motion.div>
 
           <div>
@@ -29,10 +31,10 @@ export function Hero() {
               transition={{ delay: 2.1, duration: 0.6 }}
               className="mb-4 text-sm uppercase tracking-[0.3em] text-muted-foreground"
             >
-              Ishaan Singh — West Bengal, India
+              {personal.name} — {personal.location}
             </motion.p>
             <h1 className="font-display leading-[0.95] tracking-tight text-5xl md:text-7xl lg:text-8xl">
-              {"Building".split("").map((c, i) => (
+              {hero.line1.split("").map((c, i) => (
                 <motion.span
                   key={i}
                   initial={{ opacity: 0, y: 40 }}
@@ -50,7 +52,7 @@ export function Hero() {
                 transition={{ delay: 2.4, duration: 0.7 }}
                 className="italic text-gradient"
               >
-                digital experiences
+                {hero.line2}
               </motion.span>
               <br />
               <motion.span
@@ -59,7 +61,7 @@ export function Hero() {
                 transition={{ delay: 2.55, duration: 0.7 }}
                 className="inline-block text-muted-foreground/80"
               >
-                with intent.
+                {hero.line3}
               </motion.span>
             </h1>
           </div>
@@ -70,7 +72,7 @@ export function Hero() {
             transition={{ delay: 2.7, duration: 0.7 }}
             className="max-w-lg text-base leading-relaxed text-muted-foreground md:text-lg"
           >
-            Aspiring software developer &amp; creative web designer. I care about clean code, elegant motion, and interfaces that feel human.
+            {hero.intro}
           </motion.p>
 
           <motion.div
@@ -79,14 +81,14 @@ export function Hero() {
             transition={{ delay: 2.85, duration: 0.7 }}
             className="flex flex-wrap items-center gap-3"
           >
-            <MagneticButton href="#projects">
-              View Projects <ArrowUpRight className="h-4 w-4" />
+            <MagneticButton href={hero.ctaPrimary.href}>
+              {hero.ctaPrimary.label} <ArrowUpRight className="h-4 w-4" />
             </MagneticButton>
-            <MagneticButton href="/resume.pdf" target="_blank" variant="ghost">
-              Resume <Download className="h-4 w-4" />
+            <MagneticButton href={hero.ctaResume.href} variant="ghost">
+              {hero.ctaResume.label} <Download className="h-4 w-4" />
             </MagneticButton>
-            <MagneticButton href="#contact" variant="ghost">
-              Contact <MessageCircle className="h-4 w-4" />
+            <MagneticButton href={hero.ctaContact.href} variant="ghost">
+              {hero.ctaContact.label} <MessageCircle className="h-4 w-4" />
             </MagneticButton>
           </motion.div>
 
@@ -96,13 +98,13 @@ export function Hero() {
             transition={{ delay: 3.1, duration: 0.7 }}
             className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs uppercase tracking-widest text-muted-foreground"
           >
-            {TITLES.map((t) => (
+            {hero.titles.map((t) => (
               <span key={t}>{t}</span>
             ))}
           </motion.div>
         </div>
 
-        <HeroOrb />
+        <HeroOrb initials={personal.initials} />
       </div>
 
       <motion.div
@@ -119,7 +121,7 @@ export function Hero() {
   );
 }
 
-function HeroOrb() {
+function HeroOrb({ initials }: { initials: string }) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -159,7 +161,7 @@ function HeroOrb() {
           className="relative font-display italic text-[10rem] leading-none text-gradient"
           style={{ letterSpacing: "-0.08em" }}
         >
-          IS
+          {initials}
         </span>
       </motion.div>
       <motion.div

@@ -1,18 +1,21 @@
 import { useState } from "react";
-import { Copy, Check, Github, Linkedin, Instagram, Mail } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import { Reveal } from "./Reveal";
 import { MagneticButton } from "./MagneticButton";
-
-const EMAIL = "[email protected]";
+import { DynamicIcon } from "./DynamicIcon";
+import { useSite } from "@/hooks/useSiteContent";
 
 export function Contact() {
+  const site = useSite();
+  const { contact, personal } = site;
+  const EMAIL = personal.email;
   const [copied, setCopied] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const body = `${form.message}\n\n— ${form.name}`;
-    window.location.href = `mailto:${EMAIL}?subject=${encodeURIComponent(form.subject || "Hello Ishaan")}&body=${encodeURIComponent(body)}`;
+    window.location.href = `mailto:${EMAIL}?subject=${encodeURIComponent(form.subject || "Hello " + personal.name)}&body=${encodeURIComponent(body)}`;
   };
 
   const copy = async () => {
@@ -31,13 +34,11 @@ export function Contact() {
         </Reveal>
         <Reveal delay={0.05}>
           <h2 className="mt-4 max-w-3xl font-display text-5xl leading-[1.02] tracking-tight md:text-7xl">
-            Let's build <span className="italic text-gradient">something</span> amazing.
+            {contact.heading}
           </h2>
         </Reveal>
         <Reveal delay={0.1}>
-          <p className="mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
-            Open to internships, collaborations, and interesting problems. Reach out — I usually reply within a day.
-          </p>
+          <p className="mt-6 max-w-xl text-base text-muted-foreground md:text-lg">{contact.subtitle}</p>
         </Reveal>
 
         <div className="mt-14 grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
@@ -50,19 +51,14 @@ export function Contact() {
               <Field label="Subject" value={form.subject} onChange={(v) => setForm({ ...form, subject: v })} />
               <Field label="Message" textarea value={form.message} onChange={(v) => setForm({ ...form, message: v })} required />
               <div className="mt-2">
-                <MagneticButton onClick={() => {}}>
-                  Send message →
-                </MagneticButton>
+                <MagneticButton onClick={() => {}}>Send message →</MagneticButton>
               </div>
             </form>
           </Reveal>
 
           <Reveal delay={0.2}>
             <div className="flex h-full flex-col gap-4">
-              <button
-                onClick={copy}
-                className="glass-card glass-hover flex items-center justify-between p-5 text-left"
-              >
+              <button onClick={copy} className="glass-card glass-hover flex items-center justify-between p-5 text-left">
                 <div>
                   <div className="text-xs uppercase tracking-widest text-muted-foreground">Email</div>
                   <div className="mt-1 text-base">{EMAIL}</div>
@@ -73,10 +69,20 @@ export function Contact() {
               </button>
 
               <div className="glass-card grid grid-cols-2 gap-3 p-5">
-                <Social icon={Github} label="GitHub" href="https://github.com/" />
-                <Social icon={Linkedin} label="LinkedIn" href="https://linkedin.com/" />
-                <Social icon={Instagram} label="Instagram" href="https://instagram.com/" />
-                <Social icon={Mail} label="Mail" href={`mailto:${EMAIL}`} />
+                {contact.social.map((s) => (
+                  <a
+                    key={s.label + s.href}
+                    href={s.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group flex items-center gap-3 rounded-2xl border border-glass-border bg-white/[0.02] p-3 transition hover:border-white/25 hover:bg-white/[0.05]"
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-glass-border bg-glass">
+                      <DynamicIcon name={s.icon} className="h-4 w-4" />
+                    </div>
+                    <div className="text-sm">{s.label}</div>
+                  </a>
+                ))}
               </div>
 
               <div className="glass-card flex items-center gap-3 p-5 text-sm text-muted-foreground">
@@ -84,7 +90,7 @@ export function Contact() {
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
                 </span>
-                Available for opportunities · West Bengal, IN
+                {contact.availability}
               </div>
             </div>
           </Reveal>
@@ -136,21 +142,5 @@ function Field({
         {label}
       </span>
     </label>
-  );
-}
-
-function Social({ icon: Icon, label, href }: { icon: any; label: string; href: string }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="group flex items-center gap-3 rounded-2xl border border-glass-border bg-white/[0.02] p-3 transition hover:border-white/25 hover:bg-white/[0.05]"
-    >
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-glass-border bg-glass">
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="text-sm">{label}</div>
-    </a>
   );
 }

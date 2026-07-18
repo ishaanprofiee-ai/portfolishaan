@@ -1,16 +1,10 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useEffect, useState } from "react";
-
-const links = [
-  { href: "#about", label: "About" },
-  { href: "#journey", label: "Journey" },
-  { href: "#skills", label: "Skills" },
-  { href: "#projects", label: "Projects" },
-  { href: "#gallery", label: "Gallery" },
-  { href: "#contact", label: "Contact" },
-];
+import { useSite } from "@/hooks/useSiteContent";
 
 export function Navbar() {
+  const site = useSite();
+  const links = site.nav;
   const { scrollYProgress } = useScroll();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -42,7 +36,11 @@ export function Navbar() {
           }`}
         >
           <a href="#top" className="flex items-center gap-2 font-display italic text-lg leading-none">
-            <span className="text-gradient">IS</span>
+            {site.personal.logo ? (
+              <img src={site.personal.logo} alt={site.personal.name} className="h-6 w-auto" />
+            ) : (
+              <span className="text-gradient">{site.personal.initials}</span>
+            )}
           </a>
           <ul className="hidden items-center gap-1 md:flex">
             {links.map((l) => (

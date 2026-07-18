@@ -2,8 +2,10 @@ import { Download, Eye, FileText } from "lucide-react";
 import { Section } from "./Section";
 import { Reveal } from "./Reveal";
 import { MagneticButton } from "./MagneticButton";
+import { useSite } from "@/hooks/useSiteContent";
 
 export function Resume() {
+  const { resume } = useSite();
   return (
     <Section id="resume" eyebrow="08 — Resume" title="One page. Everything.">
       <Reveal>
@@ -18,21 +20,23 @@ export function Resume() {
                 <FileText className="h-6 w-6" />
               </div>
               <div>
-                <div className="font-display text-3xl leading-tight md:text-4xl">Ishaan Singh — Resume</div>
+                <div className="font-display text-3xl leading-tight md:text-4xl">{resume.label}</div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Skills, education, projects and current focus — updated 2026.
+                  Skills, education, projects and current focus.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
-                  <span className="rounded-full border border-glass-border px-2 py-0.5">PDF · 1 page</span>
-                  <span className="rounded-full border border-glass-border px-2 py-0.5">Updated · 2026</span>
+                  <span className="rounded-full border border-glass-border px-2 py-0.5">PDF</span>
+                  {resume.updated && (
+                    <span className="rounded-full border border-glass-border px-2 py-0.5">Updated · {resume.updated}</span>
+                  )}
                 </div>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <MagneticButton href="/resume.pdf" download="Ishaan-Singh-Resume.pdf">
+              <MagneticButton href={resume.url} download={resume.filename}>
                 <Download className="h-4 w-4" /> Download
               </MagneticButton>
-              <MagneticButton href="/resume.pdf" target="_blank" variant="ghost">
+              <MagneticButton href={resume.url} target="_blank" variant="ghost">
                 <Eye className="h-4 w-4" /> View
               </MagneticButton>
             </div>

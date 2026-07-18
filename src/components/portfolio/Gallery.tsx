@@ -1,27 +1,13 @@
 import { motion } from "framer-motion";
 import { Section } from "./Section";
-
-const tiles = [
-  { h: "aspect-[3/4]", g: "linear-gradient(135deg, oklch(0.55 0.22 275), oklch(0.7 0.22 310))", label: "Aurora Study" },
-  { h: "aspect-square", g: "linear-gradient(135deg, oklch(0.75 0.15 200), oklch(0.55 0.22 275))", label: "Grid System" },
-  { h: "aspect-[4/5]", g: "linear-gradient(135deg, oklch(0.7 0.2 340), oklch(0.6 0.22 30))", label: "Type Poster" },
-  { h: "aspect-square", g: "linear-gradient(135deg, oklch(0.6 0.2 160), oklch(0.55 0.22 260))", label: "Motion Frame" },
-  { h: "aspect-[3/4]", g: "linear-gradient(135deg, oklch(0.65 0.18 30), oklch(0.7 0.2 340))", label: "Composition" },
-  { h: "aspect-[4/3]", g: "linear-gradient(135deg, oklch(0.5 0.15 265), oklch(0.75 0.15 200))", label: "UI Study" },
-  { h: "aspect-square", g: "linear-gradient(135deg, oklch(0.7 0.22 310), oklch(0.55 0.22 275))", label: "Cover" },
-  { h: "aspect-[3/4]", g: "linear-gradient(135deg, oklch(0.55 0.2 200), oklch(0.6 0.22 310))", label: "Layout" },
-];
+import { useSite } from "@/hooks/useSiteContent";
 
 export function Gallery() {
+  const { heading, subtitle, items } = useSite().gallery;
   return (
-    <Section
-      id="gallery"
-      eyebrow="07 — Gallery"
-      title="Fragments from the sketchbook."
-      subtitle="A masonry of design explorations, moodboards, and moments in progress."
-    >
+    <Section id="gallery" eyebrow="07 — Gallery" title={heading} subtitle={subtitle}>
       <div className="columns-2 gap-4 md:columns-3 lg:columns-4 [&>*]:mb-4 [&>*]:break-inside-avoid">
-        {tiles.map((t, i) => (
+        {items.map((t, i) => (
           <motion.div
             key={i}
             initial={{ opacity: 0, y: 30 }}
@@ -30,7 +16,11 @@ export function Gallery() {
             transition={{ duration: 0.7, delay: (i % 4) * 0.05 }}
             className={`glass-card group relative ${t.h} overflow-hidden`}
           >
-            <div className="absolute inset-0" style={{ background: t.g }} />
+            {t.image ? (
+              <img src={t.image} alt={t.label} className="absolute inset-0 h-full w-full object-cover" />
+            ) : (
+              <div className="absolute inset-0" style={{ background: t.g }} />
+            )}
             <div className="absolute inset-0 grid-bg opacity-20" />
             <div
               className="absolute inset-0 opacity-0 backdrop-blur-sm transition-opacity duration-500 group-hover:opacity-100"
