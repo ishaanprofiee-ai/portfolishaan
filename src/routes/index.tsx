@@ -1,24 +1,59 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Aurora } from "@/components/portfolio/Aurora";
+import { LenisProvider } from "@/components/portfolio/LenisProvider";
+import { CustomCursor } from "@/components/portfolio/CustomCursor";
+import { LoadingScreen } from "@/components/portfolio/LoadingScreen";
+import { Navbar } from "@/components/portfolio/Navbar";
+import { Hero } from "@/components/portfolio/Hero";
+import { About } from "@/components/portfolio/About";
+import { Journey } from "@/components/portfolio/Journey";
+import { Skills } from "@/components/portfolio/Skills";
+import { Projects } from "@/components/portfolio/Projects";
+import { Achievements } from "@/components/portfolio/Achievements";
+import { Interests } from "@/components/portfolio/Interests";
+import { Gallery } from "@/components/portfolio/Gallery";
+import { Resume } from "@/components/portfolio/Resume";
+import { Contact } from "@/components/portfolio/Contact";
+import { Footer } from "@/components/portfolio/Footer";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Ishaan Singh — Aspiring Software Developer & Creative Web Designer" },
+      {
+        name: "description",
+        content:
+          "Portfolio of Ishaan Singh — building modern digital experiences through code, creativity, and continuous learning.",
+      },
+      { property: "og:title", content: "Ishaan Singh — Developer & Designer" },
+      {
+        property: "og:description",
+        content: "Building modern digital experiences through code, creativity, and continuous learning.",
+      },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <main className="relative min-h-screen overflow-x-clip">
+      <LoadingScreen />
+      <LenisProvider />
+      <CustomCursor />
+      <Aurora />
+      <Navbar />
+      <Hero />
+      <About />
+      <Journey />
+      <Skills />
+      <Projects />
+      <Achievements />
+      <Interests />
+      <Gallery />
+      <Resume />
+      <Contact />
+      <Footer />
+    </main>
   );
 }
