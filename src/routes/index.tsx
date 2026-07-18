@@ -15,21 +15,16 @@ import { Gallery } from "@/components/portfolio/Gallery";
 import { Resume } from "@/components/portfolio/Resume";
 import { Contact } from "@/components/portfolio/Contact";
 import { Footer } from "@/components/portfolio/Footer";
+import { SiteContentProvider } from "@/hooks/useSiteContent";
+import { defaultContent } from "@/content/site";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Ishaan Singh — Aspiring Software Developer & Creative Web Designer" },
-      {
-        name: "description",
-        content:
-          "Portfolio of Ishaan Singh — building modern digital experiences through code, creativity, and continuous learning.",
-      },
-      { property: "og:title", content: "Ishaan Singh — Developer & Designer" },
-      {
-        property: "og:description",
-        content: "Building modern digital experiences through code, creativity, and continuous learning.",
-      },
+      { title: defaultContent.seo.title },
+      { name: "description", content: defaultContent.seo.description },
+      { property: "og:title", content: defaultContent.seo.ogTitle },
+      { property: "og:description", content: defaultContent.seo.ogDescription },
     ],
   }),
   component: Index,
@@ -37,23 +32,25 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   return (
-    <main className="relative min-h-screen overflow-x-clip">
-      <LoadingScreen />
-      <LenisProvider />
-      <CustomCursor />
-      <Aurora />
-      <Navbar />
-      <Hero />
-      <About />
-      <Journey />
-      <Skills />
-      <Projects />
-      <Achievements />
-      <Interests />
-      <Gallery />
-      <Resume />
-      <Contact />
-      <Footer />
-    </main>
+    <SiteContentProvider>
+      <main className="relative min-h-screen overflow-x-clip">
+        <LoadingScreen />
+        <LenisProvider />
+        <CustomCursor />
+        <Aurora />
+        <Navbar />
+        <Hero />
+        <About />
+        <Journey />
+        <Skills />
+        <Projects />
+        <Achievements />
+        <Interests />
+        <Gallery />
+        <Resume />
+        <Contact />
+        <Footer />
+      </main>
+    </SiteContentProvider>
   );
 }

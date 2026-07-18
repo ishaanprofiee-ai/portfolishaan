@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useInView } from "framer-motion";
 import { Section } from "./Section";
-
-const stats = [
-  { n: 4, suffix: "+", label: "Projects shipped" },
-  { n: 800, suffix: "+", label: "Learning hours" },
-  { n: 12, suffix: "", label: "Technologies" },
-  { n: 3, suffix: "", label: "Languages spoken" },
-];
+import { useSite } from "@/hooks/useSiteContent";
 
 function Counter({ to, suffix }: { to: number; suffix: string }) {
   const [n, setN] = useState(0);
@@ -36,6 +30,7 @@ function Counter({ to, suffix }: { to: number; suffix: string }) {
 }
 
 export function Achievements() {
+  const stats = useSite().achievements;
   return (
     <Section id="achievements" eyebrow="05 — By the numbers" title="Progress is the point.">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
