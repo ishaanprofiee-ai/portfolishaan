@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { useRef } from "react";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { Reveal } from "./Reveal";
 
 export function Section({
@@ -14,12 +16,26 @@ export function Section({
   subtitle?: string;
   children: ReactNode;
 }) {
+  const ref = useRef<HTMLElement | null>(null);
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start end", "end start"],
+  });
+  const y = useTransform(scrollYProgress, [0, 1], [40, -40]);
+  const eyebrowX = useTransform(scrollYProgress, [0, 1], [-30, 30]);
+
   return (
-    <section id={id} className="relative px-6 py-28 md:px-10 md:py-36">
-      <div className="mx-auto w-full max-w-6xl">
+    <section ref={ref} id={id} className="relative px-6 py-28 md:px-10 md:py-36">
+      <motion.div style={{ y }} className="mx-auto w-full max-w-6xl">
         <div className="mb-14 flex flex-col gap-4">
           <Reveal>
-            <div className="text-xs uppercase tracking-[0.4em] text-muted-foreground">{eyebrow}</div>
+            <motion.div
+              style={{ x: eyebrowX }}
+              className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.4em] text-muted-foreground"
+            >
+              <span className="h-px w-8 bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+              {eyebrow}
+            </motion.div>
           </Reveal>
           <Reveal delay={0.05}>
             <h2 className="max-w-3xl font-display text-4xl leading-[1.05] tracking-tight md:text-6xl">
@@ -33,7 +49,8 @@ export function Section({
           )}
         </div>
         {children}
-      </div>
+      </motion.div>
     </section>
   );
 }
+
