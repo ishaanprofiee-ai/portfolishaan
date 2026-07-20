@@ -1,6 +1,7 @@
-import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from "framer-motion";
 import type { ReactNode } from "react";
 import { useRef } from "react";
+
 
 /**
  * Tilt3D — mouse-tracking 3D tilt with animated gloss sheen.
@@ -24,8 +25,10 @@ export function Tilt3D({
   const sy = useSpring(y, { stiffness: 180, damping: 18, mass: 0.4 });
   const rotateX = useTransform(sy, [-0.5, 0.5], [max, -max]);
   const rotateY = useTransform(sx, [-0.5, 0.5], [-max, max]);
-  const glareX = useTransform(sx, [-0.5, 0.5], ["0%", "100%"]);
-  const glareY = useTransform(sy, [-0.5, 0.5], ["0%", "100%"]);
+  const glareX = useTransform(sx, [-0.5, 0.5], [0, 100]);
+  const glareY = useTransform(sy, [-0.5, 0.5], [0, 100]);
+  const glareBg = useMotionTemplate`radial-gradient(600px circle at ${glareX}% ${glareY}%, oklch(1 0 0 / 22%), transparent 45%)`;
+
 
   return (
     <div
@@ -57,15 +60,10 @@ export function Tilt3D({
           <motion.div
             aria-hidden
             className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-70 mix-blend-overlay"
-            style={{
-              background: useTransform(
-                [glareX, glareY] as never,
-                ([gx, gy]: string[]) =>
-                  `radial-gradient(600px circle at ${gx} ${gy}, oklch(1 0 0 / 22%), transparent 45%)`,
-              ),
-            }}
+            style={{ background: glareBg }}
           />
         )}
+
       </motion.div>
     </div>
   );
