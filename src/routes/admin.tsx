@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 
 import { adminLogin, adminLogout, adminStatus } from "@/lib/admin.functions";
+import { setAdminCsrf } from "@/lib/adminCsrf";
 import { defaultContent } from "@/content/site";
 import { DraftProvider, useDraft } from "@/components/admin/store";
 import {
@@ -88,7 +89,10 @@ function AdminPage() {
   const [status, setStatus] = useState<"loading" | "out" | "in">("loading");
   const statusFn = useServerFn(adminStatus);
   useEffect(() => {
-    void statusFn().then((r) => setStatus(r.admin ? "in" : "out"));
+    void statusFn().then((r) => {
+      setAdminCsrf(r.csrf ?? null);
+      setStatus(r.admin ? "in" : "out");
+    });
   }, [statusFn]);
 
   return (
@@ -121,8 +125,10 @@ function LoginView({ onSuccess }: { onSuccess: () => void }) {
     setError(null);
     try {
       const r = await login({ data: { email, password } });
-      if (r.ok) onSuccess();
-      else setError(r.error);
+      if (r.ok) {
+        setAdminCsrf(r.csrf ?? null);
+        onSuccess();
+      } else setError(r.error);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -245,6 +251,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const doSignOut = async () => {
     if (dirty && !confirm("You have unsaved changes. Sign out anyway?")) return;
     await logout();
+    setAdminCsrf(null);
     onSignOut();
   };
 
