@@ -22,6 +22,7 @@ import {
   getRequestIP,
 } from "@tanstack/react-start/server";
 import {
+  createHmac,
   createHash,
   timingSafeEqual,
   randomUUID,
@@ -50,6 +51,109 @@ function newCsrfToken(): string {
   return randomBytes(32).toString("hex");
 }
 
+const ADMIN_SESSION_HEADER = "x-admin-session";
+const ADMIN_CSRF_HEADER = "x-admin-csrf";
+
+type VerifiedAdmin = {
+  admin: true;
+  email: string | null;
+  csrf: string;
+  issuedAt: number;
+};
+
+function base64Url(input: string | Buffer): string {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+}
+
+function fromBase64Url(input: string): Buffer {
+  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+  return Buffer.from(padded, "base64");
+}
+
+function adminTokenSecret(): string {
+  return process.env.ADMIN_SESSION_SECRET ?? ADMIN_SESSION_CONFIG.password;
+}
+
+function signToken(payload: string): string {
+  return base64Url(createHmac("sha256", adminTokenSecret()).update(payload).digest());
+}
+
+/**
+ * Cookie sessions are preferred, but embedded mobile previews can block
+ * third-party cookies. This signed, short-lived header token is a fallback so
+ * Save/Upload still works. It never contains the admin password and still
+ * requires the matching CSRF header for writes.
+ */
+function mintAdminToken(email: string, csrf: string, issuedAt = Date.now()): string {
+  const payload = base64Url(
+    JSON.stringify({
+      admin: true,
+      email,
+      csrf,
+      issuedAt,
+      exp: issuedAt + ADMIN_SESSION_CONFIG.maxAge * 1000,
+    }),
+  );
+  return `${payload}.${signToken(payload)}`;
+}
+
+function verifyAdminToken(raw: string | null): VerifiedAdmin | null {
+  const token = (raw ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return null;
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature || !safeEqualStrings(signature, signToken(payload))) return null;
+  try {
+    const parsed = JSON.parse(fromBase64Url(payload).toString("utf8")) as {
+      admin?: boolean;
+      email?: string;
+      csrf?: string;
+      issuedAt?: number;
+      exp?: number;
+    };
+    const allowedEmail = defaultContent.admin.email.trim().toLowerCase();
+    if (!parsed.admin || !parsed.csrf || !parsed.issuedAt || !parsed.exp) return null;
+    if (Date.now() > parsed.exp) return null;
+    if ((parsed.email ?? "").trim().toLowerCase() !== allowedEmail) return null;
+    return {
+      admin: true,
+      email: parsed.email ?? null,
+      csrf: parsed.csrf,
+      issuedAt: parsed.issuedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function csrfMatches(expected: string): boolean {
+  const header = getRequestHeader(ADMIN_CSRF_HEADER) ?? "";
+  return Boolean(header) && safeEqualStrings(header, expected);
+}
+
+async function getCookieAdmin(): Promise<VerifiedAdmin | null> {
+  const session = await useSession<AdminSessionData>(ADMIN_SESSION_CONFIG);
+  if (!session.data.admin || !session.data.csrf) return null;
+
+  const issuedAt = session.data.issuedAt ?? 0;
+  const maxAgeMs = ADMIN_SESSION_CONFIG.maxAge * 1000;
+  if (!issuedAt || Date.now() - issuedAt > maxAgeMs) {
+    await session.clear();
+    return null;
+  }
+
+  return {
+    admin: true,
+    email: session.data.email ?? null,
+    csrf: session.data.csrf,
+    issuedAt,
+  };
+}
+
 /**
  * Verifies:
  *  - the encrypted session cookie says `admin: true`
@@ -58,22 +162,19 @@ function newCsrfToken(): string {
  *    (double-submit token — blocks cross-site + XSS-triggered writes)
  */
 async function requireAdmin() {
-  const session = await useSession<AdminSessionData>(ADMIN_SESSION_CONFIG);
-  if (!session.data.admin || !session.data.csrf) {
-    throw new Error("Unauthorized");
-  }
-  // Hard absolute lifetime: 7 days from issue.
-  const issuedAt = session.data.issuedAt ?? 0;
-  const maxAgeMs = ADMIN_SESSION_CONFIG.maxAge * 1000;
-  if (!issuedAt || Date.now() - issuedAt > maxAgeMs) {
-    await session.clear();
-    throw new Error("Session expired");
-  }
-  const header = getRequestHeader("x-admin-csrf") ?? "";
-  if (!header || !safeEqualStrings(header, session.data.csrf)) {
+  const cookieAdmin = await getCookieAdmin();
+  if (cookieAdmin && csrfMatches(cookieAdmin.csrf)) return cookieAdmin;
+
+  const headerAdmin = verifyAdminToken(getRequestHeader(ADMIN_SESSION_HEADER));
+  if (!headerAdmin) throw new Error("Unauthorized");
+  if (!csrfMatches(headerAdmin.csrf)) {
     throw new Error("Forbidden: invalid CSRF token");
   }
-  return session;
+  return headerAdmin;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,7 +259,7 @@ export const adminLogin = createServerFn({ method: "POST" })
       csrf,
       issuedAt: Date.now(),
     });
-    return { ok: true as const, csrf };
+    return { ok: true as const, csrf, token: mintAdminToken(data.email, csrf) };
   });
 
 export const adminLogout = createServerFn({ method: "POST" }).handler(async () => {
@@ -168,23 +269,20 @@ export const adminLogout = createServerFn({ method: "POST" }).handler(async () =
 });
 
 export const adminStatus = createServerFn({ method: "GET" }).handler(async () => {
-  const session = await useSession<AdminSessionData>(ADMIN_SESSION_CONFIG);
-  const issuedAt = session.data.issuedAt ?? 0;
-  const alive =
-    Boolean(session.data.admin) &&
-    Boolean(session.data.csrf) &&
-    issuedAt > 0 &&
-    Date.now() - issuedAt <= ADMIN_SESSION_CONFIG.maxAge * 1000;
-
-  if (!alive) {
-    // Clean up any expired shell so a subsequent login mints fresh state.
-    if (session.data.admin) await session.clear();
-    return { admin: false as const, email: null, csrf: null };
+  const cookieAdmin = await getCookieAdmin();
+  if (cookieAdmin) {
+    return {
+      admin: true as const,
+      email: cookieAdmin.email,
+      csrf: cookieAdmin.csrf,
+    };
   }
+  const headerAdmin = verifyAdminToken(getRequestHeader(ADMIN_SESSION_HEADER));
+  if (!headerAdmin) return { admin: false as const, email: null, csrf: null };
   return {
     admin: true as const,
-    email: session.data.email ?? null,
-    csrf: session.data.csrf ?? null,
+    email: headerAdmin.email,
+    csrf: headerAdmin.csrf,
   };
 });
 
@@ -242,22 +340,27 @@ function sanitizeContent(input: Record<string, unknown>): Record<string, unknown
 export const updateSiteContent = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => updateSchema.parse(data))
   .handler(async ({ data }) => {
-    await requireAdmin();
-    const clean = sanitizeContent(data.content as Record<string, unknown>);
-    const serialized = JSON.stringify(clean);
-    if (serialized.length > MAX_CONTENT_BYTES) {
-      throw new Error(
-        `Content is too large (${(serialized.length / 1024).toFixed(0)} KB, max ${
-          MAX_CONTENT_BYTES / 1024
-        } KB).`,
-      );
+    try {
+      await requireAdmin();
+      const clean = sanitizeContent(data.content as Record<string, unknown>);
+      const serialized = JSON.stringify(clean);
+      if (serialized.length > MAX_CONTENT_BYTES) {
+        throw new Error(
+          `Content is too large (${(serialized.length / 1024).toFixed(0)} KB, max ${
+            MAX_CONTENT_BYTES / 1024
+          } KB).`,
+        );
+      }
+      const updatedAt = new Date().toISOString();
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { error } = await supabaseAdmin
+        .from("site_content")
+        .upsert({ id: 1, data: clean as never, updated_at: updatedAt });
+      if (error) throw new Error(error.message);
+      return { ok: true as const, updated_at: updatedAt };
+    } catch (error) {
+      return { ok: false as const, error: errorMessage(error, "Save failed") };
     }
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin
-      .from("site_content")
-      .upsert({ id: 1, data: clean as never, updated_at: new Date().toISOString() });
-    if (error) throw new Error(error.message);
-    return { ok: true as const, updated_at: new Date().toISOString() };
   });
 
 // ---------------------------------------------------------------------------
@@ -282,6 +385,7 @@ const ALLOWED_FOLDERS = new Set([
   "gallery",
   "resume",
   "logos",
+  "branding",
   "misc",
 ]);
 
@@ -351,39 +455,43 @@ function sniffMatches(contentType: string, buf: Buffer): boolean {
 export const uploadSiteAsset = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => uploadSchema.parse(data))
   .handler(async ({ data }) => {
-    await requireAdmin();
+    try {
+      await requireAdmin();
 
-    const buffer = Buffer.from(data.base64, "base64");
-    if (buffer.byteLength === 0) throw new Error("Empty upload.");
-    if (buffer.byteLength > MAX_UPLOAD_BYTES) {
-      throw new Error(`File is too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).`);
+      const buffer = Buffer.from(data.base64, "base64");
+      if (buffer.byteLength === 0) throw new Error("Empty upload.");
+      if (buffer.byteLength > MAX_UPLOAD_BYTES) {
+        throw new Error(`File is too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).`);
+      }
+
+      const allowedExts = ALLOWED_TYPES[data.contentType];
+      if (!allowedExts) throw new Error("Unsupported file type.");
+      const ext = extFromName(data.filename);
+      if (!ext || !allowedExts.includes(ext)) {
+        throw new Error(
+          `Extension .${ext || "?"} does not match ${data.contentType}.`,
+        );
+      }
+      if (!sniffMatches(data.contentType, buffer)) {
+        throw new Error("File contents do not match the declared type.");
+      }
+
+      const folder = sanitizeFolder(data.folder);
+      const key = `${folder}/${Date.now()}-${randomUUID()}.${ext}`;
+
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { error } = await supabaseAdmin.storage
+        .from("site-assets")
+        .upload(key, buffer, {
+          contentType: data.contentType,
+          upsert: false,
+          cacheControl: "31536000",
+        });
+      if (error) throw new Error(error.message);
+      return { ok: true as const, path: key, url: `/api/public/asset/${key}` };
+    } catch (error) {
+      return { ok: false as const, error: errorMessage(error, "Upload failed") };
     }
-
-    const allowedExts = ALLOWED_TYPES[data.contentType];
-    if (!allowedExts) throw new Error("Unsupported file type.");
-    const ext = extFromName(data.filename);
-    if (!ext || !allowedExts.includes(ext)) {
-      throw new Error(
-        `Extension .${ext || "?"} does not match ${data.contentType}.`,
-      );
-    }
-    if (!sniffMatches(data.contentType, buffer)) {
-      throw new Error("File contents do not match the declared type.");
-    }
-
-    const folder = sanitizeFolder(data.folder);
-    const key = `${folder}/${Date.now()}-${randomUUID()}.${ext}`;
-
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.storage
-      .from("site-assets")
-      .upload(key, buffer, {
-        contentType: data.contentType,
-        upsert: false,
-        cacheControl: "31536000",
-      });
-    if (error) throw new Error(error.message);
-    return { ok: true as const, path: key, url: `/api/public/asset/${key}` };
   });
 
 const deleteSchema = z.object({
@@ -397,15 +505,19 @@ const deleteSchema = z.object({
 export const deleteSiteAsset = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => deleteSchema.parse(data))
   .handler(async ({ data }) => {
-    await requireAdmin();
-    const path = data.path.startsWith("/api/public/asset/")
-      ? data.path.slice("/api/public/asset/".length)
-      : data.path;
-    // Only allow deleting inside known folders.
-    const [folder] = path.split("/");
-    if (!ALLOWED_FOLDERS.has(folder)) throw new Error("Path not allowed.");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.storage.from("site-assets").remove([path]);
-    if (error) throw new Error(error.message);
-    return { ok: true as const };
+    try {
+      await requireAdmin();
+      const path = data.path.startsWith("/api/public/asset/")
+        ? data.path.slice("/api/public/asset/".length)
+        : data.path;
+      // Only allow deleting inside known folders.
+      const [folder] = path.split("/");
+      if (!ALLOWED_FOLDERS.has(folder)) throw new Error("Path not allowed.");
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { error } = await supabaseAdmin.storage.from("site-assets").remove([path]);
+      if (error) throw new Error(error.message);
+      return { ok: true as const };
+    } catch (error) {
+      return { ok: false as const, error: errorMessage(error, "Delete failed") };
+    }
   });
