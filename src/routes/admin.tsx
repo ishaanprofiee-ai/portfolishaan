@@ -214,9 +214,30 @@ const NAV: NavItem[] = [
 // Dashboard shell
 // ---------------------------------------------------------------------------
 
+function formatTime(d: Date | null): string {
+  if (!d) return "never";
+  const diff = Date.now() - d.getTime();
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const logout = useServerFn(adminLogout);
-  const { draft, dirty, saving, save, reset, reload, loading, lastSavedAt } = useDraft();
+  const {
+    draft,
+    dirty,
+    saving,
+    status,
+    errorMessage,
+    save,
+    reset,
+    reload,
+    loading,
+    lastPublishedAt,
+    autosave,
+    setAutosave,
+  } = useDraft();
   const [active, setActive] = useState<string>(() => {
     if (typeof window === "undefined") return "dashboard";
     return window.location.hash.replace(/^#/, "") || "dashboard";
@@ -254,6 +275,22 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     setAdminCsrf(null);
     onSignOut();
   };
+
+  const badge = (() => {
+    if (status === "saving") {
+      return { cls: "border-sky-400/40 bg-sky-400/10 text-sky-200", label: "Publishing…" };
+    }
+    if (status === "error") {
+      return { cls: "border-red-400/40 bg-red-400/10 text-red-200", label: "Save failed" };
+    }
+    if (status === "saved") {
+      return { cls: "border-emerald-400/40 bg-emerald-400/10 text-emerald-200", label: "Published ✓" };
+    }
+    if (dirty) {
+      return { cls: "border-amber-400/40 bg-amber-400/10 text-amber-200", label: "Unsaved changes" };
+    }
+    return { cls: "border-emerald-400/40 bg-emerald-400/10 text-emerald-200", label: "All changes saved" };
+  })();
 
   return (
     <div className="grid min-h-screen w-full bg-background text-foreground md:grid-cols-[260px_1fr]">
