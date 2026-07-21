@@ -165,7 +165,7 @@ async function requireAdmin() {
   const cookieAdmin = await getCookieAdmin();
   if (cookieAdmin && csrfMatches(cookieAdmin.csrf)) return cookieAdmin;
 
-  const headerAdmin = verifyAdminToken(getRequestHeader(ADMIN_SESSION_HEADER));
+  const headerAdmin = verifyAdminToken(getRequestHeader(ADMIN_SESSION_HEADER) ?? null);
   if (!headerAdmin) throw new Error("Unauthorized");
   if (!csrfMatches(headerAdmin.csrf)) {
     throw new Error("Forbidden: invalid CSRF token");
@@ -275,14 +275,16 @@ export const adminStatus = createServerFn({ method: "GET" }).handler(async () =>
       admin: true as const,
       email: cookieAdmin.email,
       csrf: cookieAdmin.csrf,
+      token: mintAdminToken(cookieAdmin.email ?? defaultContent.admin.email, cookieAdmin.csrf, cookieAdmin.issuedAt),
     };
   }
-  const headerAdmin = verifyAdminToken(getRequestHeader(ADMIN_SESSION_HEADER));
-  if (!headerAdmin) return { admin: false as const, email: null, csrf: null };
+  const headerAdmin = verifyAdminToken(getRequestHeader(ADMIN_SESSION_HEADER) ?? null);
+  if (!headerAdmin) return { admin: false as const, email: null, csrf: null, token: null };
   return {
     admin: true as const,
     email: headerAdmin.email,
     csrf: headerAdmin.csrf,
+    token: mintAdminToken(headerAdmin.email ?? defaultContent.admin.email, headerAdmin.csrf, headerAdmin.issuedAt),
   };
 });
 
