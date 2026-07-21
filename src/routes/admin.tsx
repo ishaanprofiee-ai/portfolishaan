@@ -214,9 +214,30 @@ const NAV: NavItem[] = [
 // Dashboard shell
 // ---------------------------------------------------------------------------
 
+function formatTime(d: Date | null): string {
+  if (!d) return "never";
+  const diff = Date.now() - d.getTime();
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const logout = useServerFn(adminLogout);
-  const { draft, dirty, saving, save, reset, reload, loading, lastSavedAt } = useDraft();
+  const {
+    draft,
+    dirty,
+    saving,
+    status,
+    errorMessage,
+    save,
+    reset,
+    reload,
+    loading,
+    lastPublishedAt,
+    autosave,
+    setAutosave,
+  } = useDraft();
   const [active, setActive] = useState<string>(() => {
     if (typeof window === "undefined") return "dashboard";
     return window.location.hash.replace(/^#/, "") || "dashboard";
@@ -254,6 +275,22 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     setAdminCsrf(null);
     onSignOut();
   };
+
+  const badge = (() => {
+    if (status === "saving") {
+      return { cls: "border-sky-400/40 bg-sky-400/10 text-sky-200", label: "Publishing…" };
+    }
+    if (status === "error") {
+      return { cls: "border-red-400/40 bg-red-400/10 text-red-200", label: "Save failed" };
+    }
+    if (status === "saved") {
+      return { cls: "border-emerald-400/40 bg-emerald-400/10 text-emerald-200", label: "Published ✓" };
+    }
+    if (dirty) {
+      return { cls: "border-amber-400/40 bg-amber-400/10 text-amber-200", label: "Unsaved changes" };
+    }
+    return { cls: "border-emerald-400/40 bg-emerald-400/10 text-emerald-200", label: "All changes saved" };
+  })();
 
   return (
     <div className="grid min-h-screen w-full bg-background text-foreground md:grid-cols-[260px_1fr]">
@@ -337,41 +374,52 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
             <div className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground">
               {activeItem.label}
             </div>
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
               <span
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px]",
-                  dirty
-                    ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
-                    : "border-emerald-400/40 bg-emerald-400/10 text-emerald-200",
+                  badge.cls,
                 )}
               >
-                {dirty ? (
-                  <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-300" /> Unsaved
-                  </>
+                {status === "saving" ? (
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300" />
+                ) : status === "error" ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                ) : dirty ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
                 ) : (
-                  <>
-                    <CheckCircle2 className="h-3 w-3" /> Saved
-                  </>
+                  <CheckCircle2 className="h-3 w-3" />
                 )}
+                {badge.label}
               </span>
               {loading && <span className="text-xs text-muted-foreground">Loading…</span>}
-              {lastSavedAt && !dirty && (
+              {lastPublishedAt && (
                 <span className="text-xs text-muted-foreground">
-                  Last published {lastSavedAt.toLocaleTimeString()}
+                  Last published {formatTime(lastPublishedAt)}
                 </span>
+              )}
+              {status === "error" && errorMessage && (
+                <span className="text-xs text-red-300">· {errorMessage}</span>
               )}
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <label className="hidden items-center gap-1.5 rounded-xl border border-glass-border bg-white/[0.02] px-3 py-2 text-xs text-muted-foreground sm:inline-flex">
+              <input
+                type="checkbox"
+                checked={autosave}
+                onChange={(e) => setAutosave(e.target.checked)}
+                className="h-3 w-3 accent-white"
+              />
+              Autosave 30s
+            </label>
             <a
               href="/"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 rounded-xl border border-glass-border bg-white/[0.02] px-3 py-2 text-xs hover:border-white/25"
             >
-              <ExternalLink className="h-3.5 w-3.5" /> View site
+              <ExternalLink className="h-3.5 w-3.5" /> Preview
             </a>
             <button
               onClick={() => void reload()}
@@ -394,6 +442,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
               <Save className="h-3.5 w-3.5" /> {saving ? "Publishing…" : "Publish"}
             </button>
           </div>
+
         </header>
 
         <main className="mx-auto w-full max-w-4xl px-4 py-8 md:px-8">
