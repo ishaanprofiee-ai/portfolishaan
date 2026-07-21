@@ -150,6 +150,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       const res = await saveFn({
         data: { content: snapshot as unknown as Record<string, unknown> },
       });
+      if (!res.ok) throw new Error(res.error);
       // Re-hydrate from the value we just committed (the DB now matches).
       setSavedSnapshot(snapshot);
       setDraft((cur) =>
