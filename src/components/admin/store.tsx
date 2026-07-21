@@ -1,15 +1,14 @@
 /**
- * Admin draft store — the single stateful hub of the /admin dashboard.
+ * Admin draft store — single source of truth for the /admin dashboard.
  *
- * Keeps the "draft" copy of SiteContent in memory (initialised from the
- * live DB row, falling back to defaults) and exposes helpers to:
- *   - read the whole draft or a slice
- *   - patch any path in the tree with strong typing
- *   - track dirty state, save, and reload
+ * Design:
+ *   • `savedSnapshot` (STATE, not ref) holds the last known DB-persisted copy.
+ *   • `draft` holds in-progress edits.
+ *   • `dirty` = deep-equal comparison of the two.
  *
- * The portfolio itself keeps reading from `useSite()`; the admin edits are
- * only visible to visitors once `save()` succeeds, at which point every
- * component refreshes via the realtime subscription in useSiteContent.
+ * After a successful save we re-hydrate BOTH from the server response, so a
+ * browser refresh (or the realtime subscription on the public site) always
+ * reflects exactly what's in the database. There is no other local state.
  */
 import {
   createContext,
@@ -28,6 +27,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { defaultContent, mergeContent, type SiteContent } from "@/content/site";
 import { updateSiteContent } from "@/lib/admin.functions";
 
+export type SaveStatus = "idle" | "saving" | "saved" | "error";
+
 type SetPathFn = <K extends keyof SiteContent>(key: K, value: SiteContent[K]) => void;
 
 interface DraftContextValue {
@@ -36,46 +37,79 @@ interface DraftContextValue {
   dirty: boolean;
   loading: boolean;
   saving: boolean;
+  status: SaveStatus;
+  errorMessage: string | null;
   lastSavedAt: Date | null;
+  lastPublishedAt: Date | null;
+  autosave: boolean;
+  setAutosave: (v: boolean) => void;
   setSection: SetPathFn;
   update: (updater: (prev: SiteContent) => SiteContent) => void;
   reset: () => void;
   reload: () => Promise<void>;
-  save: () => Promise<void>;
+  save: () => Promise<boolean>;
   loadDefaults: () => void;
 }
 
 const DraftContext = createContext<DraftContextValue | null>(null);
 
+/** Stable stringify so key ordering can't produce false-positive dirty flags. */
+function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_k, v) => {
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      const sorted: Record<string, unknown> = {};
+      for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+        sorted[k] = (v as Record<string, unknown>)[k];
+      }
+      return sorted;
+    }
+    return v;
+  });
+}
+
 export function DraftProvider({ children }: { children: ReactNode }) {
-  const save = useServerFn(updateSiteContent);
-  const [live, setLive] = useState<SiteContent>(defaultContent);
+  const saveFn = useServerFn(updateSiteContent);
+  const [savedSnapshot, setSavedSnapshot] = useState<SiteContent>(defaultContent);
   const [draft, setDraft] = useState<SiteContent>(defaultContent);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<SaveStatus>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
-  const initial = useRef<string>(JSON.stringify(defaultContent));
+  const [lastPublishedAt, setLastPublishedAt] = useState<Date | null>(null);
+  const [autosave, setAutosaveState] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("admin.autosave") === "1";
+  });
 
-  const dirty = useMemo(() => JSON.stringify(draft) !== initial.current, [draft]);
+  const setAutosave = useCallback((v: boolean) => {
+    setAutosaveState(v);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("admin.autosave", v ? "1" : "0");
+    }
+  }, []);
+
+  const dirty = useMemo(
+    () => stableStringify(draft) !== stableStringify(savedSnapshot),
+    [draft, savedSnapshot],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("site_content")
-        .select("data")
+        .select("data, updated_at")
         .eq("id", 1)
         .maybeSingle();
       if (error) throw error;
       const merged = mergeContent(data?.data);
-      setLive(merged);
+      setSavedSnapshot(merged);
       setDraft(merged);
-      initial.current = JSON.stringify(merged);
+      if (data?.updated_at) setLastPublishedAt(new Date(data.updated_at));
     } catch (err) {
       console.warn("[admin] Failed to load site_content, using defaults:", err);
-      setLive(defaultContent);
+      setSavedSnapshot(defaultContent);
       setDraft(defaultContent);
-      initial.current = JSON.stringify(defaultContent);
     } finally {
       setLoading(false);
     }
@@ -104,32 +138,72 @@ export function DraftProvider({ children }: { children: ReactNode }) {
     setDraft((prev) => updater(prev));
   }, []);
 
-  const reset = useCallback(() => setDraft(live), [live]);
+  const reset = useCallback(() => setDraft(savedSnapshot), [savedSnapshot]);
   const loadDefaults = useCallback(() => setDraft(defaultContent), []);
 
-  const doSave = useCallback(async () => {
-    setSaving(true);
+  const doSave = useCallback(async (): Promise<boolean> => {
+    setStatus("saving");
+    setErrorMessage(null);
+    // Snapshot the draft at call-time so late edits don't reset dirty falsely.
+    const snapshot = draft;
     try {
-      await save({ data: { content: draft as unknown as Record<string, unknown> } });
-      setLive(draft);
-      initial.current = JSON.stringify(draft);
-      setLastSavedAt(new Date());
-      toast.success("Changes published to the live site");
+      const res = await saveFn({
+        data: { content: snapshot as unknown as Record<string, unknown> },
+      });
+      // Re-hydrate from the value we just committed (the DB now matches).
+      setSavedSnapshot(snapshot);
+      setDraft((cur) =>
+        stableStringify(cur) === stableStringify(snapshot) ? snapshot : cur,
+      );
+      const when = res?.updated_at ? new Date(res.updated_at) : new Date();
+      setLastSavedAt(when);
+      setLastPublishedAt(when);
+      setStatus("saved");
+      toast.success("Published — live site updated");
+      return true;
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to publish");
-    } finally {
-      setSaving(false);
+      const message = e instanceof Error ? e.message : "Failed to publish";
+      setErrorMessage(message);
+      setStatus("error");
+      toast.error(message);
+      return false;
     }
-  }, [draft, save]);
+  }, [draft, saveFn]);
+
+  // Auto-flip "saved" back to "idle" after a short delay for UX.
+  useEffect(() => {
+    if (status !== "saved") return;
+    const t = window.setTimeout(() => setStatus("idle"), 2400);
+    return () => window.clearTimeout(t);
+  }, [status]);
+
+  // Optional autosave every 30s while dirty.
+  const savingRef = useRef(false);
+  useEffect(() => {
+    savingRef.current = status === "saving";
+  }, [status]);
+  useEffect(() => {
+    if (!autosave) return;
+    const interval = window.setInterval(() => {
+      if (!dirty || savingRef.current) return;
+      void doSave();
+    }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [autosave, dirty, doSave]);
 
   const value = useMemo<DraftContextValue>(
     () => ({
       draft,
-      live,
+      live: savedSnapshot,
       dirty,
       loading,
-      saving,
+      saving: status === "saving",
+      status,
+      errorMessage,
       lastSavedAt,
+      lastPublishedAt,
+      autosave,
+      setAutosave,
       setSection,
       update,
       reset,
@@ -137,7 +211,24 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       save: doSave,
       loadDefaults,
     }),
-    [draft, live, dirty, loading, saving, lastSavedAt, setSection, update, reset, load, doSave, loadDefaults],
+    [
+      draft,
+      savedSnapshot,
+      dirty,
+      loading,
+      status,
+      errorMessage,
+      lastSavedAt,
+      lastPublishedAt,
+      autosave,
+      setAutosave,
+      setSection,
+      update,
+      reset,
+      load,
+      doSave,
+      loadDefaults,
+    ],
   );
 
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
