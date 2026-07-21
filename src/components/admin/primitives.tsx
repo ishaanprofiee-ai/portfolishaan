@@ -309,6 +309,7 @@ export function useUpload(folder: string) {
         const res = await upload({
           data: { filename: file.name, contentType: file.type || "application/octet-stream", base64, folder },
         });
+        if (!res.ok) throw new Error(res.error);
         return res.url;
       } finally {
         setBusy(false);
@@ -321,7 +322,8 @@ export function useUpload(folder: string) {
     async (urlOrPath: string) => {
       if (!urlOrPath || !urlOrPath.startsWith("/api/public/asset/")) return;
       try {
-        await del({ data: { path: urlOrPath } });
+        const res = await del({ data: { path: urlOrPath } });
+        if (!res.ok) throw new Error(res.error);
       } catch (e) {
         console.warn("[admin] delete asset failed", e);
       }
