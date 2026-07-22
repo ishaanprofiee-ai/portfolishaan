@@ -84,17 +84,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Portfolio of Ishaan Singh — aspiring software developer and creative web designer building modern, interactive digital experiences.",
       },
       { name: "author", content: "Ishaan Singh" },
-      { property: "og:title", content: "Ishaan Singh — Developer & Designer" },
+      { property: "og:title", content: "Ishaan Singh — Aspiring Software Developer & Creative Web Designer" },
       {
         property: "og:description",
-        content: "Building modern digital experiences through code, creativity, and continuous learning.",
+        content: "Portfolio of Ishaan Singh — aspiring software developer and creative web designer building modern, interactive digital experiences.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Ishaan Singh — Aspiring Software Developer & Creative Web Designer" },
+      { name: "twitter:description", content: "Portfolio of Ishaan Singh — aspiring software developer and creative web designer building modern, interactive digital experiences." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/ee899eb5-78f3-4593-8c49-54c48538380e" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/ee899eb5-78f3-4593-8c49-54c48538380e" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
